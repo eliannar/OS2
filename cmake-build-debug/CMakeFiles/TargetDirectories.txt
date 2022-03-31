@@ -1,0 +1,3 @@
+/cs/usr/eliannar/CLionProjects/OS2/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/cs/usr/eliannar/CLionProjects/OS2/cmake-build-debug/CMakeFiles/edit_cache.dir
+/cs/usr/eliannar/CLionProjects/OS2/cmake-build-debug/CMakeFiles/OS2.dir

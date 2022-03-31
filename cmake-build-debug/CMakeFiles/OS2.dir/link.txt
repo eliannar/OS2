@@ -1,0 +1,2 @@
+/usr/bin/ar qc libOS2.a CMakeFiles/OS2.dir/library.cpp.o CMakeFiles/OS2.dir/main.cpp.o
+/usr/bin/ranlib libOS2.a
