@@ -1,2 +1,1 @@
-/usr/bin/ar qc libOS2.a CMakeFiles/OS2.dir/library.cpp.o CMakeFiles/OS2.dir/main.cpp.o
-/usr/bin/ranlib libOS2.a
+/usr/bin/c++.exe -g  -Wl,--enable-auto-import CMakeFiles/OS2.dir/uthreads.cpp.o CMakeFiles/OS2.dir/main.cpp.o  -o OS2.exe -Wl,--out-implib,libOS2.dll.a -Wl,--major-image-version,0,--minor-image-version,0 
