@@ -62,6 +62,7 @@ list<Thread *> ready = list<Thread *>();
 int quantum_usecs;
 int quantum_secs;
 int cur_tid;
+int global_quanta;
 
 
 /// helper functions
@@ -115,6 +116,29 @@ int exit_and_free(int exit_code){
 	exit(exit_code);
 }
 
+void timer_handler(int sig){
+	//needs to switch current thread back to READY and put next thread into run
+	if(all_threads[cur_tid] != nullptr){
+		Thread* cur_thread_ptr = all_threads[cur_tid];
+		//todo something with a signal
+		if(cur_thread_ptr->state == State::Running){
+			cur_thread_ptr->state = State::Ready;
+			ready.push_back(cur_thread_ptr);
+		}
+		//else if (cur_thread_ptr->state == State::Blocked){ todo should we do anything?
+	}
+	//run next thread that is in READY
+	if (!ready.empty()){
+		Thread* cur_thread_ptr = ready.front();
+		ready.pop_front();
+		cur_thread_ptr->state = State::Running;
+		cur_tid = cur_thread_ptr->id;
+		//todo should we update quanta here?
+		//todo something with signals
+
+	}
+	//todo what if it is empty?
+}
 
 /// real functions
 int uthread_init(int quantum_usecs_p){
@@ -131,28 +155,47 @@ int uthread_init(int quantum_usecs_p){
 	quantum_secs = quantum_usecs_p / 1000000;
 
 	// create newThread - thread with id == 0
-	Thread* newThread;
+	Thread* HeadThread;
 	try
 	{
-		newThread = new Thread();
+		HeadThread = new Thread();
 	}
 	catch (bad_alloc &)
 	{
 		cerr << SYS_ERROR_MESSAGE << FAILED_ALLOC_ERR << endl;
 		exit_and_free(ERROR_EXIT_CODE);
 	}
-	newThread->id = get_next_id();
-	newThread->state = State::Running;
-	sigsetjmp(newThread->env, 1);
-	all_threads[0] = newThread;
+	HeadThread->id = get_next_id();
+	HeadThread->state = State::Running;
+	sigsetjmp(HeadThread->env, 1);
+	all_threads[0] = HeadThread;
 
-	// TODO figure out time stuff
+	// Install timer_handler as the signal handler for SIGVTALRM.
+	struct sigaction sa = {0};
+	struct itimerval timer;
+	sa.sa_handler = &timer_handler;
+	if (sigaction(SIGVTALRM, &sa, nullptr) < 0)
+	{
+		//todo error
+		exit(FAILURE);
+	}
+	//timer should initially expire after given guantum value, and continue to expire with same
+	// value
+	timer.it_value.tv_sec = quantum_secs;
+	timer.it_value.tv_usec = quantum_usecs;
+	timer.it_interval.tv_sec = quantum_secs;
+	timer.it_interval.tv_usec = quantum_usecs;
+	if (setitimer(ITIMER_VIRTUAL, &timer, nullptr))
+	{
+		//todo error
+		exit(FAILURE);
+	}
+	global_quanta++; //todo what does this count? when should it be updated?
+	HeadThread->quanta = 1; //todo what does this count? when should it be updated?
 
 	return SUCCESS;
 
 }
-
-
 
 
 int uthread_spawn(thread_entry_point entry_point){
@@ -189,7 +232,7 @@ int uthread_spawn(thread_entry_point entry_point){
 	//}
 
     //todo signal (unmask alarm signal)
-
+	return id;
 }
 
 int uthread_terminate(int tid){
@@ -200,9 +243,9 @@ int uthread_terminate(int tid){
     if(tid == 0){
         return exit_and_free(SUCCESS_EXIT_CODE);
     }
-    //if(tid in Ready){ //todo
-    //delete from ready
-    //}
+    if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){
+		ready.remove(all_threads[tid]);
+    }
 
     delete all_threads[tid];
     all_threads[tid] = nullptr;
@@ -210,3 +253,55 @@ int uthread_terminate(int tid){
     return SUCCESS;
 }
 
+int uthread_block(int tid){
+	if(is_invalid_tid(tid) || tid == 0){
+		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		return FAILURE;
+	}
+	if(all_threads[tid]->state != State::Blocked){
+		if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){ //or if state==ready
+			ready.remove(all_threads[tid]);
+		}
+		else{
+			//todo scheduling decision if Running
+		}
+		//todo signals?
+		all_threads[tid]->state = State::Blocked;
+	}
+	return SUCCESS;
+}
+
+
+
+int uthread_resume(int tid){
+	if(is_invalid_tid(tid)){
+		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		return FAILURE;
+	}
+	if(all_threads[tid]->state == State::Blocked){
+		ready.push_back(all_threads[tid]);
+		all_threads[tid]->state = State::Ready;
+		//todo anything else? signals?
+	}
+	return SUCCESS;
+}
+
+
+int uthread_sleep(int num_quantums);
+
+
+int uthread_get_tid(){
+	return cur_tid;
+}
+
+int uthread_get_total_quantums(){
+	return global_quanta;
+}
+
+int uthread_get_quantums(int tid){
+	if(is_invalid_tid(tid)){
+		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		return FAILURE;
+	}
+	return all_threads[tid]->quanta;
+}
