@@ -10,7 +10,7 @@
 #include <queue>
 #include <iostream>
 #include <list>
-#include <unordered_set>
+#include <unordered_map>
 
 using namespace std;
 
@@ -63,6 +63,7 @@ bool available_ids[MAX_THREAD_NUM];
 // in this method, everything is initialized to nullptr
 vector<Thread *> all_threads = vector<Thread *>(MAX_THREAD_NUM);
 list<Thread *> ready = list<Thread *>();
+unordered_map<int, list<int>> sleeping = unordered_map<int, list<int>>();
 int quantum_usecs;
 int quantum_secs;
 int cur_tid;
@@ -138,6 +139,15 @@ void timer_handler(int sig){
 		{
 			cur_thread_ptr->state = State::Ready;
 			ready.push_back(cur_thread_ptr);
+		}
+	}
+	// check if sleeping threads should be woken
+	auto wakeup_pair = sleeping.find(global_quanta + 1);
+	if (wakeup_pair != sleeping.end()) {
+		for (auto i = wakeup_pair->second.begin(); i != wakeup_pair->second.end(); ++wakeup_pair) {
+			Thread* wakeup_thread_ptr = all_threads[i];
+			wakeup_thread_ptr->state = State::Ready;
+			ready.push_back(wakeup_thread_ptr);
 		}
 	}
 	//run next thread that is in READY
@@ -320,7 +330,20 @@ int uthread_resume(int tid){
 int uthread_sleep(int num_quantums)
 {
 	// todo mask
-
+	int wake_up_quanta = global_quanta + num_quantums;
+	all_threads[cur_tid]->state = State::Blocked;
+	// check if wake_up_quanta in hashmap
+	auto it = sleeping.find(wake_up_quanta);
+	if (it == sleeping.end()) {
+		// if not found, insert with tid
+		pair<int, list<int>> thread_wake(wake_up_quanta,list<int>(cur_tid));
+		sleeping.insert(thread_wake);
+	}
+	else {
+		// if found, add tid to list
+		it->second.push_back(cur_tid);
+	}
+	// TODO reset timer and run next thread
 	// todo unmask
 }
 
