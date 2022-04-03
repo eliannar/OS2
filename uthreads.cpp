@@ -130,44 +130,6 @@ int exit_and_free(int exit_code){
 	exit(exit_code);
 }
 
-void timer_handler(int sig){
-	//needs to switch current thread back to READY and put next thread into run
-	// null check is neccessary if thread terminated
-	//todo mask signal
-	if(all_threads[cur_tid] != nullptr){
-		Thread* cur_thread_ptr = all_threads[cur_tid];
-		if(cur_thread_ptr->state == State::Running)
-		{
-			cur_thread_ptr->state = State::Ready;
-			ready.push_back(cur_thread_ptr);
-		}
-	}
-	// check if sleeping threads should be woken
-	auto wakeup_pair = sleeping.find(global_quanta + 1);
-	if (wakeup_pair != sleeping.end()) {
-		for (auto i = wakeup_pair->second.begin(); i != wakeup_pair->second.end(); ++wakeup_pair) {
-			Thread* wakeup_thread_ptr = all_threads[i];
-			wakeup_thread_ptr->state = State::Ready;
-			ready.push_back(wakeup_thread_ptr);
-		}
-	}
-	//run next thread that is in READY
-	if (!ready.empty()){
-		Thread* cur_thread_ptr = ready.front();
-		ready.pop_front();
-		cur_tid = cur_thread_ptr->id;
-		cur_thread_ptr->state = State::Running;
-		// update quanta
-		cur_thread_ptr->quanta++;
-		global_quanta++;
-		//todo unmask signal
-		siglongjmp(cur_thread_ptr->env, 1);
-	}
-	else {
-		std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
-		exit_and_free(ERROR_EXIT_CODE);
-	}
-}
 
 int mask_timer(){
 	sigset_t set;
@@ -202,6 +164,47 @@ int unmask_timer(){
 		return FAILURE;
 	}
 	return SUCCESS;
+}
+
+
+void timer_handler(int sig){
+	//needs to switch current thread back to READY and put next thread into run
+	// null check is neccessary if thread terminated
+	mask_timer();
+	if(all_threads[cur_tid] != nullptr){
+		Thread* cur_thread_ptr = all_threads[cur_tid];
+		if(cur_thread_ptr->state == State::Running)
+		{
+			cur_thread_ptr->state = State::Ready;
+			ready.push_back(cur_thread_ptr);
+		}
+	}
+	// check if sleeping threads should be woken
+	auto wakeup_pair = sleeping.find(global_quanta + 1);
+	if (wakeup_pair != sleeping.end()) {
+		for (auto i = wakeup_pair->second.begin(); i != wakeup_pair->second.end(); ++wakeup_pair) {
+			Thread* wakeup_thread_ptr = all_threads[i];
+			wakeup_thread_ptr->state = State::Ready;
+			ready.push_back(wakeup_thread_ptr);
+		}
+	}
+	//run next thread that is in READY
+	if (!ready.empty()){
+		Thread* cur_thread_ptr = ready.front();
+		ready.pop_front();
+		cur_tid = cur_thread_ptr->id;
+		cur_thread_ptr->state = State::Running;
+		// update quanta
+		cur_thread_ptr->quanta++;
+		global_quanta++;
+		unmask_timer();
+		siglongjmp(cur_thread_ptr->env, 1);
+	}
+	else {
+		std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
+		unmask_timer();
+		exit_and_free(ERROR_EXIT_CODE);
+	}
 }
 
 /// real functions
