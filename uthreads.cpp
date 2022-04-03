@@ -130,17 +130,14 @@ int exit_and_free(int exit_code){
 
 void timer_handler(int sig){
 	//needs to switch current thread back to READY and put next thread into run
+	// null check is neccessary if thread terminated
+	//todo mask signal
 	if(all_threads[cur_tid] != nullptr){
 		Thread* cur_thread_ptr = all_threads[cur_tid];
-		// this is neccessary to if thread terminated
-		if (cur_thread_ptr != nullptr) {
-			//todo something with a signal
-			if(cur_thread_ptr->state == State::Running){
-				cur_thread_ptr->state = State::Ready;
-				ready.push_back(cur_thread_ptr);
-			}
-			//else if (cur_thread_ptr->state == State::Blocked){ todo should we do anything?
-
+		if(cur_thread_ptr->state == State::Running)
+		{
+			cur_thread_ptr->state = State::Ready;
+			ready.push_back(cur_thread_ptr);
 		}
 	}
 	//run next thread that is in READY
@@ -152,9 +149,8 @@ void timer_handler(int sig){
 		// update quanta
 		cur_thread_ptr->quanta++;
 		global_quanta++;
+		//todo unmask signal
 		siglongjmp(cur_thread_ptr->env, 1);
-		//todo something with signals
-
 	}
 	else {
 		std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
@@ -198,7 +194,6 @@ int uthread_init(int quantum_usecs_p){
 	sa.sa_handler = &timer_handler;
 	if (sigaction(SIGVTALRM, &sa, nullptr) < 0)
 	{
-		//todo error
 		std::cerr << SYS_ERROR_MESSAGE << SIGACTION_ERR << endl;
 		exit(FAILURE);
 	}
@@ -210,26 +205,23 @@ int uthread_init(int quantum_usecs_p){
 	timer.it_interval.tv_usec = quantum_usecs;
 	if (setitimer(ITIMER_VIRTUAL, &timer, nullptr))
 	{
-		//todo error
-
 		std::cerr << SYS_ERROR_MESSAGE << TIMER_ERR << endl;
 		exit(FAILURE);
 	}
-	global_quanta++; //todo what does this count? when should it be updated?
-	HeadThread->quanta = 1; //todo what does this count? when should it be updated?
-
+	global_quanta++;
+	HeadThread->quanta = 1;
 	return SUCCESS;
 
 }
 
 
 int uthread_spawn(thread_entry_point entry_point){
+	// todo mask signal
     int id = get_next_id();
     if(id == FAILURE){
 		cerr << LIB_ERROR_MESSAGE << MAX_THREAD_NUM_ERR << endl;
         return FAILURE;
     }
-
 	// create new thread and set it's id
 	Thread* newThread;
 	try
@@ -244,15 +236,14 @@ int uthread_spawn(thread_entry_point entry_point){
 	newThread->id = id;
 	newThread->quanta = 0;
 	newThread->state = State::Ready;
-
-
+	ready.push_back(newThread);
+	all_threads[id] = newThread;
 	// initializes env to use the right stack, and to run from the function 'entry_point', when we'll use
 	// siglongjmp to jump into the thread.
 	address_t sp, pc;
 	sp = (address_t) (newThread->stack) + STACK_SIZE - sizeof(address_t);
 	pc = (address_t) entry_point;
 	sigsetjmp(newThread->env, 1);
-	// TODO figure out this section
 	(newThread->env->__jmpbuf)[JB_SP] = translate_address(sp);
 	(newThread->env->__jmpbuf)[JB_PC] = translate_address(pc);
 	if (sigemptyset(&newThread->env->__saved_mask) == FAILURE)
@@ -260,12 +251,12 @@ int uthread_spawn(thread_entry_point entry_point){
 		cerr << SYS_ERROR_MESSAGE << SIGEMPTYSET_ERR << endl;
 		exit_and_free(ERROR_EXIT_CODE);
 	}
-
-    //todo signal (unmask alarm signal)
+    //todo unmask alarm signal
 	return id;
 }
 
 int uthread_terminate(int tid){
+	//todo mask signal
     if (is_invalid_tid(tid)){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
         return FAILURE;
@@ -276,14 +267,15 @@ int uthread_terminate(int tid){
     if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){
 		ready.remove(all_threads[tid]);
     }
-
     delete all_threads[tid];
     all_threads[tid] = nullptr;
     available_ids[tid] = true;
+    // todo unmask signal
     return SUCCESS;
 }
 
 int uthread_block(int tid){
+	// todo signal mask
 	if(is_invalid_tid(tid) || tid == 0){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
 		return FAILURE;
@@ -293,9 +285,9 @@ int uthread_block(int tid){
 			ready.remove(all_threads[tid]);
 		}
 		else{
-			//todo scheduling decision if Running
+			//todo figure out where to unmask?
+			//todo call timerhandler and reset timer
 		}
-		//todo signals?
 		all_threads[tid]->state = State::Blocked;
 	}
 	return SUCCESS;
@@ -304,6 +296,7 @@ int uthread_block(int tid){
 
 
 int uthread_resume(int tid){
+	// todo mask
 	if(is_invalid_tid(tid)){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
 		return FAILURE;
@@ -318,13 +311,18 @@ int uthread_resume(int tid){
 	if(all_threads[tid]->state == State::Blocked){
 		ready.push_back(all_threads[tid]);
 		all_threads[tid]->state = State::Ready;
-		//todo anything else? signals?
 	}
+	// todo unmask
 	return SUCCESS;
 }
 
 
-int uthread_sleep(int num_quantums);
+int uthread_sleep(int num_quantums)
+{
+	// todo mask
+
+	// todo unmask
+}
 
 
 int uthread_get_tid(){
