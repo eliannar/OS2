@@ -1,9 +1,8 @@
 file(REMOVE_RECURSE
   "CMakeFiles/OS2.dir/main.cpp.o"
   "CMakeFiles/OS2.dir/uthreads.cpp.o"
-  "OS2.exe"
+  "OS2"
   "OS2.pdb"
-  "libOS2.dll.a"
 )
 
 # Per-language clean rules from dependency scanning.

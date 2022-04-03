@@ -11,6 +11,7 @@
 #include <iostream>
 #include <list>
 #include <unordered_map>
+#include <algorithm>
 
 using namespace std;
 
@@ -167,30 +168,30 @@ int unmask_timer(){
 
 
 void run_next_thread() {
-	if (!ready.empty()) {
-		Thread* cur_thread_ptr = ready.front();
-		ready.pop_front();
-		cur_tid = cur_thread_ptr->id;
-		cur_thread_ptr->state = State::Running;
-		// update quanta
-		cur_thread_ptr->quanta++;
-		global_quanta++;
-		unmask_timer();
-		siglongjmp(cur_thread_ptr->env, 1);	}
-	else {
-		std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
-		unmask_timer();
-		exit_and_free(ERROR_EXIT_CODE);
-	}
-
+    if (ready.empty()) {
+        std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
+        exit_and_free(ERROR_EXIT_CODE);
+    }
+    Thread* cur_thread_ptr = ready.front();
+    ready.pop_front();
+    cur_tid = cur_thread_ptr->id;
+    cur_thread_ptr->state = State::Running;
+    // update quanta
+    cur_thread_ptr->quanta++;
+    global_quanta++;
+    siglongjmp(cur_thread_ptr->env, 1);
 }
 
 void timer_handler(int sig){
-	mask_timer();
 	//needs to switch current thread back to READY and put next thread into run
 	// null check is neccessary if thread terminated
 	if(all_threads[cur_tid] != nullptr){
 		Thread* cur_thread_ptr = all_threads[cur_tid];
+		// save current thread context
+		int ret = sigsetjmp(cur_thread_ptr->env, 1);
+		if (ret == FAILURE) {
+		    return;
+		}
 		if(cur_thread_ptr->state == State::Running)
 		{
 			cur_thread_ptr->state = State::Ready;
@@ -255,13 +256,13 @@ int uthread_init(int quantum_usecs_p){
 		exit_and_free(ERROR_EXIT_CODE);
 	}
 	HeadThread->id = get_next_id();
-	HeadThread->state = State::Running;
 	sigsetjmp(HeadThread->env, 1);
+	HeadThread->state = State::Running;
 	all_threads[0] = HeadThread;
 
 	// Install timer_handler as the signal handler for SIGVTALRM.
 	struct sigaction sa = {0};
-	struct itimerval timer;
+	struct itimerval timer{};
 	sa.sa_handler = &timer_handler;
 	if (sigaction(SIGVTALRM, &sa, nullptr) < 0)
 	{

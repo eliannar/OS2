@@ -3,4 +3,4 @@ project (OS2)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(OS2 uthreads.cpp main.cpp)
+add_executable(OS2 uthreads.h uthreads.cpp main.cpp)
