@@ -130,7 +130,6 @@ int exit_and_free(int exit_code){
 	exit(exit_code);
 }
 
-
 int mask_timer(){
 	sigset_t set;
 	if(sigemptyset(&set) == FAILURE){
@@ -167,10 +166,29 @@ int unmask_timer(){
 }
 
 
+void run_next_thread() {
+	if (!ready.empty()) {
+		Thread* cur_thread_ptr = ready.front();
+		ready.pop_front();
+		cur_tid = cur_thread_ptr->id;
+		cur_thread_ptr->state = State::Running;
+		// update quanta
+		cur_thread_ptr->quanta++;
+		global_quanta++;
+		unmask_timer();
+		siglongjmp(cur_thread_ptr->env, 1);	}
+	else {
+		std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
+		unmask_timer();
+		exit_and_free(ERROR_EXIT_CODE);
+	}
+
+}
+
 void timer_handler(int sig){
+	mask_timer();
 	//needs to switch current thread back to READY and put next thread into run
 	// null check is neccessary if thread terminated
-	mask_timer();
 	if(all_threads[cur_tid] != nullptr){
 		Thread* cur_thread_ptr = all_threads[cur_tid];
 		if(cur_thread_ptr->state == State::Running)
@@ -183,33 +201,37 @@ void timer_handler(int sig){
 	auto wakeup_pair = sleeping.find(global_quanta + 1);
 	if (wakeup_pair != sleeping.end()) {
 		for (auto i = wakeup_pair->second.begin(); i != wakeup_pair->second.end(); ++wakeup_pair) {
-			Thread* wakeup_thread_ptr = all_threads[i];
+			int tid = *(i);
+			Thread* wakeup_thread_ptr = all_threads[tid];
 			wakeup_thread_ptr->state = State::Ready;
 			ready.push_back(wakeup_thread_ptr);
 		}
 	}
 	//run next thread that is in READY
-	if (!ready.empty()){
-		Thread* cur_thread_ptr = ready.front();
-		ready.pop_front();
-		cur_tid = cur_thread_ptr->id;
-		cur_thread_ptr->state = State::Running;
-		// update quanta
-		cur_thread_ptr->quanta++;
-		global_quanta++;
-		unmask_timer();
-		siglongjmp(cur_thread_ptr->env, 1);
-	}
-	else {
-		std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
-		unmask_timer();
-		exit_and_free(ERROR_EXIT_CODE);
-	}
+	run_next_thread();
 }
+
+
+void reset_timer_and_run_next()
+{
+	mask_timer();
+	// reset timer
+	struct itimerval timer{};
+	timer.it_value.tv_sec = quantum_secs;
+	timer.it_value.tv_usec = quantum_usecs;
+	timer.it_interval.tv_sec = quantum_secs;
+	timer.it_interval.tv_usec = quantum_usecs;
+	if (setitimer(ITIMER_VIRTUAL, &timer, nullptr))
+	{
+		std::cerr << SYS_ERROR_MESSAGE << TIMER_ERR << endl;
+		exit(FAILURE);
+	}
+	run_next_thread();
+}
+
 
 /// real functions
 int uthread_init(int quantum_usecs_p){
-
 	// non-positive quantum is invalid
 	if (quantum_usecs_p <= 0) {
 		cerr << LIB_ERROR_MESSAGE << INVALID_QUANTUM_USECS_ERR << endl;
@@ -287,8 +309,6 @@ int uthread_spawn(thread_entry_point entry_point){
 	newThread->id = id;
 	newThread->quanta = 0;
 	newThread->state = State::Ready;
-	ready.push_back(newThread);
-	all_threads[id] = newThread;
 	// initializes env to use the right stack, and to run from the function 'entry_point', when we'll use
 	// siglongjmp to jump into the thread.
 	address_t sp, pc;
@@ -303,6 +323,8 @@ int uthread_spawn(thread_entry_point entry_point){
 		unmask_timer();
 		exit_and_free(ERROR_EXIT_CODE);
 	}
+	ready.push_back(newThread);
+	all_threads[id] = newThread;
     unmask_timer();
 	return id;
 }
@@ -321,10 +343,15 @@ int uthread_terminate(int tid){
     if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){
 		ready.remove(all_threads[tid]);
     }
-    delete all_threads[tid];
+    bool is_running = (all_threads[tid]->state == State::Running);
+	delete all_threads[tid];
     all_threads[tid] = nullptr;
     available_ids[tid] = true;
-    unmask_timer();
+	unmask_timer();
+	if (is_running)
+	{
+		reset_timer_and_run_next();
+	}
     return SUCCESS;
 }
 
@@ -339,12 +366,12 @@ int uthread_block(int tid){
 		if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){ //or if state==ready
 			ready.remove(all_threads[tid]);
 		}
-		else{
-			//todo figure out where to unmask?
-			//todo call timerhandler and reset timer
+		else{ // or state == running
+			reset_timer_and_run_next();
 		}
 		all_threads[tid]->state = State::Blocked;
 	}
+	unmask_timer();
 	return SUCCESS;
 }
 
@@ -389,8 +416,9 @@ int uthread_sleep(int num_quantums){
 		// if found, add tid to list
 		it->second.push_back(cur_tid);
 	}
-	// TODO reset timer and run next thread
-	// todo unmask
+	unmask_timer();
+	reset_timer_and_run_next();
+	return SUCCESS;
 }
 
 
