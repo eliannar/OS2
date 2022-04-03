@@ -22,11 +22,14 @@ using namespace std;
 #define INVALID_TID_ERR "Invalid tid"
 #define MAX_THREAD_NUM_ERR "The number of threads has exceeded the maximum"
 #define INVALID_QUANTUM_USECS_ERR "Invalid quantum_usecs"
+#define READY_EMPTY_ERR "Ready queue had no threads to run"
 
 //==== sys errors
 #define SYS_ERROR_MESSAGE "system error: "
-#define FAILED_ALLOC_ERR "error in alloc"
-#define SIGEMPTYSET_ERR "error in sigemptyset"
+#define FAILED_ALLOC_ERR "Error in alloc"
+#define SIGEMPTYSET_ERR "Error in sigemptyset"
+#define TIMER_ERR "Error in timer initialization"
+#define SIGACTION_ERR "Error in sigaction initialization"
 
 
 #define ERROR_EXIT_CODE 1
@@ -36,11 +39,12 @@ using namespace std;
 
 
 
-typedef unsigned long int address_t;
 
 enum State{Ready, Blocked, Running};
 
-
+/**
+ * Struct for
+ */
 typedef struct Thread{
     int id;
     int quanta;
@@ -67,7 +71,13 @@ int global_quanta;
 
 /// helper functions
 
-//blackbox translation
+
+typedef unsigned long address_t;
+#define JB_SP 6
+#define JB_PC 7
+
+/* A translation is required when using an address of a variable.
+   Use this as a black box in your code. */
 address_t translate_address(address_t addr)
 {
 	address_t ret;
@@ -77,6 +87,8 @@ address_t translate_address(address_t addr)
 	: "0" (addr));
 	return ret;
 }
+
+
 
 // checks if a given tid is in valid range and exists
 bool is_invalid_tid(int tid)
@@ -120,24 +132,34 @@ void timer_handler(int sig){
 	//needs to switch current thread back to READY and put next thread into run
 	if(all_threads[cur_tid] != nullptr){
 		Thread* cur_thread_ptr = all_threads[cur_tid];
-		//todo something with a signal
-		if(cur_thread_ptr->state == State::Running){
-			cur_thread_ptr->state = State::Ready;
-			ready.push_back(cur_thread_ptr);
+		// this is neccessary to if thread terminated
+		if (cur_thread_ptr != nullptr) {
+			//todo something with a signal
+			if(cur_thread_ptr->state == State::Running){
+				cur_thread_ptr->state = State::Ready;
+				ready.push_back(cur_thread_ptr);
+			}
+			//else if (cur_thread_ptr->state == State::Blocked){ todo should we do anything?
+
 		}
-		//else if (cur_thread_ptr->state == State::Blocked){ todo should we do anything?
 	}
 	//run next thread that is in READY
 	if (!ready.empty()){
 		Thread* cur_thread_ptr = ready.front();
 		ready.pop_front();
-		cur_thread_ptr->state = State::Running;
 		cur_tid = cur_thread_ptr->id;
-		//todo should we update quanta here?
+		cur_thread_ptr->state = State::Running;
+		// update quanta
+		cur_thread_ptr->quanta++;
+		global_quanta++;
+		siglongjmp(cur_thread_ptr->env, 1);
 		//todo something with signals
 
 	}
-	//todo what if it is empty?
+	else {
+		std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
+		exit_and_free(ERROR_EXIT_CODE);
+	}
 }
 
 /// real functions
@@ -177,6 +199,7 @@ int uthread_init(int quantum_usecs_p){
 	if (sigaction(SIGVTALRM, &sa, nullptr) < 0)
 	{
 		//todo error
+		std::cerr << SYS_ERROR_MESSAGE << SIGACTION_ERR << endl;
 		exit(FAILURE);
 	}
 	//timer should initially expire after given guantum value, and continue to expire with same
@@ -188,6 +211,8 @@ int uthread_init(int quantum_usecs_p){
 	if (setitimer(ITIMER_VIRTUAL, &timer, nullptr))
 	{
 		//todo error
+
+		std::cerr << SYS_ERROR_MESSAGE << TIMER_ERR << endl;
 		exit(FAILURE);
 	}
 	global_quanta++; //todo what does this count? when should it be updated?
@@ -219,17 +244,22 @@ int uthread_spawn(thread_entry_point entry_point){
 	newThread->id = id;
 	newThread->quanta = 0;
 	newThread->state = State::Ready;
+
+
+	// initializes env to use the right stack, and to run from the function 'entry_point', when we'll use
+	// siglongjmp to jump into the thread.
 	address_t sp, pc;
 	sp = (address_t) (newThread->stack) + STACK_SIZE - sizeof(address_t);
 	pc = (address_t) entry_point;
 	sigsetjmp(newThread->env, 1);
 	// TODO figure out this section
-	//(newThread->env->__jmpbuf)[JB_SP] = translate_address(sp);
-	//(newThread->env->__jmpbuf)[JB_PC] = translate_address(pc);
-	//if (sigemptyset(&newThread->env->__saved_mask) == FAILURE)
-	//{
-	//	cerr << SYS_ERROR_MESSAGE << SIGEMPTYSET_ERR << endl;
-	//}
+	(newThread->env->__jmpbuf)[JB_SP] = translate_address(sp);
+	(newThread->env->__jmpbuf)[JB_PC] = translate_address(pc);
+	if (sigemptyset(&newThread->env->__saved_mask) == FAILURE)
+	{
+		cerr << SYS_ERROR_MESSAGE << SIGEMPTYSET_ERR << endl;
+		exit_and_free(ERROR_EXIT_CODE);
+	}
 
     //todo signal (unmask alarm signal)
 	return id;
@@ -278,6 +308,13 @@ int uthread_resume(int tid){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
 		return FAILURE;
 	}
+	Thread *resumeThread = all_threads[tid];
+	// check if tid is a valid thread's id.
+	if (resumeThread == nullptr)
+	{
+		std::cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		return FAILURE;
+	}
 	if(all_threads[tid]->state == State::Blocked){
 		ready.push_back(all_threads[tid]);
 		all_threads[tid]->state = State::Ready;
@@ -301,6 +338,12 @@ int uthread_get_total_quantums(){
 int uthread_get_quantums(int tid){
 	if(is_invalid_tid(tid)){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		return FAILURE;
+	}
+	Thread *thread = all_threads[tid];
+	if (thread == nullptr)
+	{
+		std::cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
 		return FAILURE;
 	}
 	return all_threads[tid]->quanta;
