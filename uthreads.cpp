@@ -30,7 +30,8 @@ using namespace std;
 #define SIGEMPTYSET_ERR "Error in sigemptyset"
 #define TIMER_ERR "Error in timer initialization"
 #define SIGACTION_ERR "Error in sigaction initialization"
-
+#define MASK_ERR "Error in signal masking"
+#define UNMASK_ERR "Error in signal unmasking"
 
 #define ERROR_EXIT_CODE 1
 #define SUCCESS_EXIT_CODE 0
@@ -168,6 +169,41 @@ void timer_handler(int sig){
 	}
 }
 
+int mask_timer(){
+	sigset_t set;
+	if(sigemptyset(&set) == FAILURE){
+		std::cerr << SYS_ERROR_MESSAGE << MASK_ERR << endl;
+		return FAILURE;
+	}
+	if(sigaddset(&set, SIGVTALRM) == FAILURE){
+		std::cerr << SYS_ERROR_MESSAGE << MASK_ERR << endl;
+		return FAILURE;
+	}
+	//todo maybe need to add to old set
+	if(sigprocmask(SIG_BLOCK, &set, nullptr) == FAILURE){
+		std::cerr << SYS_ERROR_MESSAGE << MASK_ERR << endl;
+		return FAILURE;
+	}
+	return SUCCESS;
+}
+
+int unmask_timer(){
+	sigset_t set;
+	if(sigemptyset(&set) == FAILURE){
+		std::cerr << SYS_ERROR_MESSAGE << UNMASK_ERR << endl;
+		return FAILURE;
+	}
+	if(sigaddset(&set, SIGVTALRM) == FAILURE){
+		std::cerr << SYS_ERROR_MESSAGE << UNMASK_ERR << endl;
+		return FAILURE;
+	}
+	if(sigprocmask(SIG_UNBLOCK, &set, nullptr) == FAILURE){
+		std::cerr << SYS_ERROR_MESSAGE << UNMASK_ERR << endl;
+		return FAILURE;
+	}
+	return SUCCESS;
+}
+
 /// real functions
 int uthread_init(int quantum_usecs_p){
 
@@ -226,10 +262,11 @@ int uthread_init(int quantum_usecs_p){
 
 
 int uthread_spawn(thread_entry_point entry_point){
-	// todo mask signal
+	mask_timer();
     int id = get_next_id();
     if(id == FAILURE){
 		cerr << LIB_ERROR_MESSAGE << MAX_THREAD_NUM_ERR << endl;
+		unmask_timer();
         return FAILURE;
     }
 	// create new thread and set it's id
@@ -241,6 +278,7 @@ int uthread_spawn(thread_entry_point entry_point){
 	catch (bad_alloc &)
 	{
 		cerr << SYS_ERROR_MESSAGE << FAILED_ALLOC_ERR << endl;
+		unmask_timer();
 		exit_and_free(ERROR_EXIT_CODE);
 	}
 	newThread->id = id;
@@ -259,19 +297,22 @@ int uthread_spawn(thread_entry_point entry_point){
 	if (sigemptyset(&newThread->env->__saved_mask) == FAILURE)
 	{
 		cerr << SYS_ERROR_MESSAGE << SIGEMPTYSET_ERR << endl;
+		unmask_timer();
 		exit_and_free(ERROR_EXIT_CODE);
 	}
-    //todo unmask alarm signal
+    unmask_timer();
 	return id;
 }
 
 int uthread_terminate(int tid){
-	//todo mask signal
+	mask_timer();
     if (is_invalid_tid(tid)){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		unmask_timer();
         return FAILURE;
     }
     if(tid == 0){
+    	unmask_timer();
         return exit_and_free(SUCCESS_EXIT_CODE);
     }
     if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){
@@ -280,14 +321,15 @@ int uthread_terminate(int tid){
     delete all_threads[tid];
     all_threads[tid] = nullptr;
     available_ids[tid] = true;
-    // todo unmask signal
+    unmask_timer();
     return SUCCESS;
 }
 
 int uthread_block(int tid){
-	// todo signal mask
+	mask_timer();
 	if(is_invalid_tid(tid) || tid == 0){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		unmask_timer();
 		return FAILURE;
 	}
 	if(all_threads[tid]->state != State::Blocked){
@@ -306,9 +348,10 @@ int uthread_block(int tid){
 
 
 int uthread_resume(int tid){
-	// todo mask
+	mask_timer();
 	if(is_invalid_tid(tid)){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		unmask_timer();
 		return FAILURE;
 	}
 	Thread *resumeThread = all_threads[tid];
@@ -316,20 +359,20 @@ int uthread_resume(int tid){
 	if (resumeThread == nullptr)
 	{
 		std::cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
+		unmask_timer();
 		return FAILURE;
 	}
 	if(all_threads[tid]->state == State::Blocked){
 		ready.push_back(all_threads[tid]);
 		all_threads[tid]->state = State::Ready;
 	}
-	// todo unmask
+	unmask_timer();
 	return SUCCESS;
 }
 
 
-int uthread_sleep(int num_quantums)
-{
-	// todo mask
+int uthread_sleep(int num_quantums){
+	mask_timer();
 	int wake_up_quanta = global_quanta + num_quantums;
 	all_threads[cur_tid]->state = State::Blocked;
 	// check if wake_up_quanta in hashmap

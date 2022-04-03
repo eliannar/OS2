@@ -9,5 +9,6 @@ using namespace std;
 
 int main()
 {
-	return uthread_init(6);
+	uthread_init(6);
+	return 0;
 }
