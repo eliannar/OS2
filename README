@@ -1,0 +1,39 @@
+eliannar, maayan.amid
+Elianna Rosenschein (315673665), Maayan Amid (318318862)
+EX: 2
+
+FILES:
+
+REMARKS:
+
+
+ANSWERS:
+
+Part 1: Theoretical Questions
+
+1. //todo
+
+2. One advantage to separating tabs into processes rather than threads is that the tabs do not
+share resources and do not communicate with each other. This means that each one operates in
+isolation from the others, and if one crashes it will not affect the other, whereas the failure of
+one thread might affect the others. Furthermore, the isolation between processes means that code run
+in one process can not “touch” the other processes, which creates a more secure environment from
+processes that might be running malicious or irresponsible code, as might happen on the internet.
+The disadvantage of running processes rather than threads is that it is much slower to create and
+terminate a new process and to switch between them, and it requires more memory to maintain separate
+processes.
+
+3. //todo
+
+4. Real time refers to the actual time that has passed in the world and in the system, regardless of
+ what process is running. Virtual time refers to the amount of time that a thread or process has
+ been running. The real time of a program is thus at least a sum of the virtual times of its threads
+  and processes. Real time would be used when the real-world timing matters to the running of the
+  program, such as an alarm set for a certain time. Virtual time will be used to track how long a
+  process or thread has run, such as setting a timeout for an amount of time we want to allocate a
+  certain task.
+
+5. sigsetjmp: Saves the current thread's environment in its env field for later use.
+siglongjmp: Restores the environment that was saved in the call to sigsetjmp.
+These functions allow us to save a thread's state and switch between them while each thread still
+maintains its environment.
