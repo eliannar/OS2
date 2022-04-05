@@ -332,7 +332,10 @@ void count_to_4_block_1_thread_then_resume()
         sleeper(sleep_time);
     }
     cout << "resume thread 1: " << uthread_resume(1) << endl;
+//    sleeper(30);
+//    std::cout << "Ive returned " << endl; todo this works
     uthread_terminate(id);
+//    sleeper(30); todo and it stays here moving between process 1 and 0
 }
 
 
@@ -487,6 +490,7 @@ void test_2_4_2_blocking_main_thread_error()
     uthread_init(SECOND);
     cout << "thread 1 is trying to block main thread" << endl;
     uthread_spawn(block_main_thread);
+    sleeper(10);
     cout << "main is trying to block itself, returns: " << uthread_block(0) << endl;
     while (true){}
 }
@@ -505,6 +509,7 @@ void test_2_4_4_blocking_a_blocked_thread()
     uthread_init(SECOND);
     uthread_spawn(single_thread_print_to_8);
     uthread_spawn(single_thread_print_to_8);
+    sleeper(5);
     cout << "blocking first time: " << uthread_block(1) << endl;
     cout << "blocking second time: " << uthread_block(1) << endl;
     while (true){}
@@ -561,33 +566,33 @@ void block_1_thread_then_resume()
 
 int main()
 {
-    test_1_create_and_terminate();
-    //    test_2_create_two_threads();
-    //    test_3_get_terminated_id();
-    //    test_4_creating_too_many_threads();
-    //    test_5_terminating_main_thread();
-    //    test_6_block_thread();
-    //    test_7_self_block_thread();
-    //    test_8_block_and_resume();
-    //    test_9_basic_single_thread_quanta();
-    //    test_2_1_1_init_call_with_negative_error();
-    //    test_2_1_2_init_call_with_positive();
-    //    test_2_2_1_spawn_regular_case();
-    //    test_2_2_1_spawn_more_threads_than_max();
-    //    test_2_3_1_terminate_one_thread_terminates_other();
-    //    test_2_3_2_self_termination();
-    //    test_2_3_3_main_self_termination();
-    //    test_2_3_4_thread_1_killing_main();
-    //    test_2_3_5_get_smallest_terminated_id();
-    //    test_2_3_6_terminate_valid_and_invalid_threads_return_values_check();
-    //    test_2_4_1_block_simple_block_by_main_and_other_thread();
-    //    test_2_4_2_block_not_exists_thread();
-    //    test_2_4_2_blocking_main_thread_error();
-    //    test_2_4_3_thread_blocking_itself();
-    //    test_2_4_4_blocking_a_blocked_thread();
-    //    test_2_5_1_resuming_a_blocked_thread();
-    //    test_2_5_2_resuming_ready_running_and_main();
-    //    test_2_6_1_mutex_lock_return();
+//    test_1_create_and_terminate();
+//    test_2_create_two_threads();
+//    test_3_get_terminated_id();
+//    test_4_creating_too_many_threads();
+//    test_5_terminating_main_thread();
+//    test_6_block_thread();
+//    test_7_self_block_thread();
+    test_8_block_and_resume();
+//    test_9_basic_single_thread_quanta();
+//    test_2_1_1_init_call_with_negative_error();
+//    test_2_1_2_init_call_with_positive();
+//    test_2_2_1_spawn_regular_case();
+//    test_2_2_1_spawn_more_threads_than_max();
+//    test_2_3_1_terminate_one_thread_terminates_other();
+//    test_2_3_2_self_termination();
+//    test_2_3_3_main_self_termination();
+//    test_2_3_4_thread_1_killing_main();
+//    test_2_3_5_get_smallest_terminated_id();
+//    test_2_3_6_terminate_valid_and_invalid_threads_return_values_check();
+//    test_2_4_1_block_simple_block_by_main_and_other_thread();
+//    test_2_4_2_block_not_exists_thread();
+//    test_2_4_2_blocking_main_thread_error();
+//    test_2_4_3_thread_blocking_itself();
+//    test_2_4_4_blocking_a_blocked_thread();
+//    test_2_5_1_resuming_a_blocked_thread();
+//    test_2_5_2_resuming_ready_running_and_main();
+//        test_2_6_1_mutex_lock_return();
     //    test_2_6_2_mutex_threads_waiting();
     //    test_2_6_3_main_thread_is_mutex_blocked();
     //    test_2_6_4_double_lock_error();
@@ -599,6 +604,6 @@ int main()
     //    test_2_6_10_resuming_mutex_blocked_thread_that_wont_get_the_mutex();
     //    test_mutex_locked_by_blocked_thread();
     //    test_terminating_thread_that_locks_the_mutex_while_mutex_queue_not_empty();
-    //test_terminating_thread_that_locks_the_mutex_while_mutex_queue_empty();
+    //    test_terminating_thread_that_locks_the_mutex_while_mutex_queue_empty();
     return 0;
 }

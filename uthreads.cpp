@@ -168,6 +168,8 @@ int unmask_timer(){
 
 
 void run_next_thread() {
+    //cout<< "runner" << endl;
+
     if (ready.empty()) {
         std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
         exit_and_free(ERROR_EXIT_CODE);
@@ -175,6 +177,7 @@ void run_next_thread() {
     Thread* cur_thread_ptr = ready.front();
     ready.pop_front();
     cur_tid = cur_thread_ptr->id;
+//    cout << cur_tid << endl;
     cur_thread_ptr->state = State::Running;
     // update quanta
     cur_thread_ptr->quanta++;
@@ -183,13 +186,14 @@ void run_next_thread() {
 }
 
 void timer_handler(int sig){
+    //cout<< "timer" << endl;
 	//needs to switch current thread back to READY and put next thread into run
 	// null check is neccessary if thread terminated
 	if(all_threads[cur_tid] != nullptr){
 		Thread* cur_thread_ptr = all_threads[cur_tid];
 		// save current thread context
 		int ret = sigsetjmp(cur_thread_ptr->env, 1);
-		if (ret == FAILURE) {
+		if (ret != SUCCESS) {
 		    return;
 		}
 		if(cur_thread_ptr->state == State::Running)
@@ -364,13 +368,19 @@ int uthread_block(int tid){
 		return FAILURE;
 	}
 	if(all_threads[tid]->state != State::Blocked){
-		if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){ //or if state==ready
+	    all_threads[tid]->state = State::Blocked;
+		if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){ // if state==ready
 			ready.remove(all_threads[tid]);
 		}
-		else{ // or state == running
+		else{ // if state == running meaning we're blocking ourselves
+		    int ret = sigsetjmp(all_threads[tid]->env, 1);
+            if (ret != SUCCESS) {
+                unmask_timer();
+                return SUCCESS;
+            }
+		    unmask_timer();
 			reset_timer_and_run_next();
 		}
-		all_threads[tid]->state = State::Blocked;
 	}
 	unmask_timer();
 	return SUCCESS;
@@ -387,15 +397,15 @@ int uthread_resume(int tid){
 	}
 	Thread *resumeThread = all_threads[tid];
 	// check if tid is a valid thread's id.
-	if (resumeThread == nullptr)
+	if (resumeThread == nullptr) //todo why is this here after we checked validity?
 	{
 		std::cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
 		unmask_timer();
 		return FAILURE;
 	}
 	if(all_threads[tid]->state == State::Blocked){
-		ready.push_back(all_threads[tid]);
 		all_threads[tid]->state = State::Ready;
+		ready.push_back(all_threads[tid]);
 	}
 	unmask_timer();
 	return SUCCESS;
