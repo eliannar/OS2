@@ -44,11 +44,11 @@ enum State{Ready, Blocked, Running};
  * Struct for Thread. Holds id, local quanta, environement, state and stack.
  */
 typedef struct Thread{
-    int id;
-    int quanta;
-    sigjmp_buf env;
-    State state;
-    char stack[STACK_SIZE];
+	int id;
+	int quanta;
+	sigjmp_buf env;
+	State state;
+	char stack[STACK_SIZE];
 } Thread;
 
 
@@ -158,7 +158,6 @@ int mask_timer(){
 		std::cerr << SYS_ERROR_MESSAGE << MASK_ERR << endl;
 		return FAILURE;
 	}
-	//todo maybe need to add to old set
 	if(sigprocmask(SIG_BLOCK, &set, nullptr) == FAILURE){
 		std::cerr << SYS_ERROR_MESSAGE << MASK_ERR << endl;
 		return FAILURE;
@@ -196,21 +195,21 @@ int unmask_timer(){
  * @return void
 */
 void run_next_thread() {
-    //cout<< "runner" << endl;
+	//cout<< "runner" << endl;
 
-    if (ready.empty()) {
-        std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
-        exit_and_free(ERROR_EXIT_CODE);
-    }
-    Thread* cur_thread_ptr = ready.front();
-    ready.pop_front();
-    cur_tid = cur_thread_ptr->id;
-//    cout << cur_tid << endl;
-    cur_thread_ptr->state = State::Running;
-    // update quanta
-    cur_thread_ptr->quanta++;
-    global_quanta++;
-    siglongjmp(cur_thread_ptr->env, 1);
+	if (ready.empty()) {
+		std::cerr << LIB_ERROR_MESSAGE << READY_EMPTY_ERR << endl;
+		exit_and_free(ERROR_EXIT_CODE);
+	}
+	Thread* cur_thread_ptr = ready.front();
+	ready.pop_front();
+	cur_tid = cur_thread_ptr->id;
+	//    cout << cur_tid << endl;
+	cur_thread_ptr->state = State::Running;
+	// update quanta
+	cur_thread_ptr->quanta++;
+	global_quanta++;
+	siglongjmp(cur_thread_ptr->env, 1);
 }
 
 /**
@@ -227,7 +226,7 @@ void timer_handler(int sig){
 		// save current thread context
 		int ret = sigsetjmp(cur_thread_ptr->env, 1);
 		if (ret != SUCCESS) {
-		    return;
+			return;
 		}
 		if(cur_thread_ptr->state == State::Running)
 		{
@@ -238,7 +237,7 @@ void timer_handler(int sig){
 	// check if sleeping threads should be woken
 	auto wakeup_pair = sleeping.find(global_quanta + 1);
 	if (wakeup_pair != sleeping.end()) {
-		for (auto i = wakeup_pair->second.begin(); i != wakeup_pair->second.end(); ++wakeup_pair) {
+		for (auto i = wakeup_pair->second.begin(); i != wakeup_pair->second.end(); i++) {
 			int tid = *(i);
 			Thread* wakeup_thread_ptr = all_threads[tid];
 			wakeup_thread_ptr->state = State::Ready;
@@ -351,12 +350,12 @@ int uthread_init(int quantum_usecs_p){
 */
 int uthread_spawn(thread_entry_point entry_point){
 	mask_timer();
-    int id = get_next_id();
-    if(id == FAILURE){
+	int id = get_next_id();
+	if(id == FAILURE){
 		cerr << LIB_ERROR_MESSAGE << MAX_THREAD_NUM_ERR << endl;
 		unmask_timer();
-        return FAILURE;
-    }
+		return FAILURE;
+	}
 	// create new thread and set it's id
 	Thread* newThread;
 	try
@@ -388,7 +387,7 @@ int uthread_spawn(thread_entry_point entry_point){
 	}
 	ready.push_back(newThread);
 	all_threads[id] = newThread;
-    unmask_timer();
+	unmask_timer();
 	return id;
 }
 
@@ -404,28 +403,28 @@ int uthread_spawn(thread_entry_point entry_point){
 */
 int uthread_terminate(int tid){
 	mask_timer();
-    if (is_invalid_tid(tid)){
+	if (is_invalid_tid(tid)){
 		cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
 		unmask_timer();
-        return FAILURE;
-    }
-    if(tid == 0){
-    	unmask_timer();
-        return exit_and_free(SUCCESS_EXIT_CODE);
-    }
-    if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){
+		return FAILURE;
+	}
+	if(tid == 0){
+		unmask_timer();
+		return exit_and_free(SUCCESS_EXIT_CODE);
+	}
+	if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){
 		ready.remove(all_threads[tid]);
-    }
-    bool is_running = (all_threads[tid]->state == State::Running);
+	}
+	bool is_running = (all_threads[tid]->state == State::Running);
 	delete all_threads[tid];
-    all_threads[tid] = nullptr;
-    available_ids[tid] = true;
+	all_threads[tid] = nullptr;
+	available_ids[tid] = true;
 	unmask_timer();
 	if (is_running)
 	{
 		reset_timer_and_run_next();
 	}
-    return SUCCESS;
+	return SUCCESS;
 }
 
 
@@ -446,17 +445,17 @@ int uthread_block(int tid){
 		return FAILURE;
 	}
 	if(all_threads[tid]->state != State::Blocked){
-	    all_threads[tid]->state = State::Blocked;
+		all_threads[tid]->state = State::Blocked;
 		if(find(ready.begin(), ready.end(), all_threads[tid]) != ready.end()){ // if state==ready
 			ready.remove(all_threads[tid]);
 		}
 		else{ // if state == running meaning we're blocking ourselves
-		    int ret = sigsetjmp(all_threads[tid]->env, 1);
-            if (ret != SUCCESS) {
-                unmask_timer();
-                return SUCCESS;
-            }
-		    unmask_timer();
+			int ret = sigsetjmp(all_threads[tid]->env, 1);
+			if (ret != SUCCESS) {
+				unmask_timer();
+				return SUCCESS;
+			}
+			unmask_timer();
 			reset_timer_and_run_next();
 		}
 	}
@@ -483,7 +482,7 @@ int uthread_resume(int tid){
 	}
 	Thread *resumeThread = all_threads[tid];
 	// check if tid is a valid thread's id.
-	if (resumeThread == nullptr) //todo why is this here after we checked validity?
+	if (resumeThread == nullptr)
 	{
 		std::cerr << LIB_ERROR_MESSAGE << INVALID_TID_ERR << endl;
 		unmask_timer();
@@ -512,12 +511,19 @@ int uthread_resume(int tid){
 int uthread_sleep(int num_quantums){
 	mask_timer();
 	int wake_up_quanta = global_quanta + num_quantums;
+	// save state of current thread
+	int ret = sigsetjmp(all_threads[cur_tid]->env, 1);
+	if (ret != SUCCESS) {
+		unmask_timer();
+		return SUCCESS;
+	}
 	all_threads[cur_tid]->state = State::Blocked;
 	// check if wake_up_quanta in hashmap
 	auto it = sleeping.find(wake_up_quanta);
 	if (it == sleeping.end()) {
 		// if not found, insert with tid
-		pair<int, list<int>> thread_wake(wake_up_quanta,list<int>(cur_tid));
+		pair<int, list<int>> thread_wake(wake_up_quanta,list<int>());
+		thread_wake.second.push_back(cur_tid);
 		sleeping.insert(thread_wake);
 	}
 	else {
