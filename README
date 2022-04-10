@@ -10,19 +10,31 @@ ANSWERS:
 
 Part 1: Theoretical Questions
 
-1. //todo
+1. An information system that runs on RAM and must comply with queries of different priorities. The
+benefit of multithreading is that it would not block any single query from running, as we do not
+know how long any single query would run. User level threads will allow this system to run queries
+in parallel with specialized scheduling capabilities that enable prioritization of queries that the
+OS would not be able to determine. In this usecase, because the proceeses are using RAM and don't
+need OS faciliation for access to disc memmory, the likelihood of the process being blocked by one
+thread is low.
 
-2. One advantage to separating tabs into processes rather than threads is that the tabs do not
+2. One advantage of separating tabs into processes rather than threads is that the tabs do not
 share resources and do not communicate with each other. This means that each one operates in
 isolation from the others, and if one crashes it will not affect the other, whereas the failure of
-one thread might affect the others. Furthermore, the isolation between processes means that code run
-in one process can not “touch” the other processes, which creates a more secure environment from
-processes that might be running malicious or irresponsible code, as might happen on the internet.
-The disadvantage of running processes rather than threads is that it is much slower to create and
-terminate a new process and to switch between them, and it requires more memory to maintain separate
-processes.
+one thread might affect the other threads. Furthermore, the isolation between processes means that
+code run in one process can not “touch” the other processes, which creates a more secure environment
+ from processes that might be running malicious or irresponsible code, as might happen on the
+ internet.The disadvantage of running processes rather than threads is that it is much slower to
+ create and terminate a new process and to switch between them, and it requires more memory to
+ maintain separate processes.
 
-3. //todo
+3.
+a. Shotwell has a pid of 9080.
+c. When typing "kill 9080", the keyboard sent interrupts to the cpu, which then calls the OS handler
+ to deal with the interrupt. The handler saves the current state and transfers control to the
+ relevant process to deal with the keyboard input. Once this is completed it returns the context to
+ the previous process and returns to user mode. This will reoccur for each keystroke. The result
+ is a kill() system call which sends a signal from the OS to the process 9080, which terminates it.
 
 4. Real time refers to the actual time that has passed in the world and in the system, regardless of
  what process is running. Virtual time refers to the amount of time that a thread or process has
@@ -32,7 +44,7 @@ processes.
   process or thread has run, such as setting a timeout for an amount of time we want to allocate a
   certain task.
 
-5. sigsetjmp: Saves the current thread's environment in its env field for later use.
+5. sigsetjmp: Saves the current thread's environment in an env field for later use.
 siglongjmp: Restores the environment that was saved in the call to sigsetjmp.
 These functions allow us to save a thread's state and switch between them while each thread still
 maintains its environment.
